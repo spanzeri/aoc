@@ -20,7 +20,7 @@ pub fn main() !void {
     outer1: for (values.items) |i| {
         for (values.items) |j| {
             if (i + j == 2020) {
-                std.debug.print("Solution 1: {} * {} = {}\n", .{ i, j, i * j });
+                std.debug.print("Day 01 - Solution 1: {} * {} = {}\n", .{ i, j, i * j });
                 break :outer1;
             }
         }
@@ -33,7 +33,7 @@ pub fn main() !void {
 
             for (values.items) |k| {
                 if (i + j + k == 2020) {
-                    std.debug.print("Solution 2: {} * {} * {} = {}\n", .{ i, j, k, i * j * k });
+                    std.debug.print("Day 01 - Solution 2: {} * {} * {} = {}\n", .{ i, j, k, i * j * k });
                     break :outer2;
                 }
             }
