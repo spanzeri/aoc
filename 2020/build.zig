@@ -1,12 +1,13 @@
 const Builder = @import("std").build.Builder;
 
 pub fn build(b: *Builder) !void {
-    const mode = b.standardReleaseOptions();
+    const src = "src/day_02.zig";
 
-    const day01 = b.addExecutable("advent", "src/day_01.zig");
-    day01.setBuildMode(mode);
-    day01.install();
-    const run01_cmd = day01.run();
-    const run01_step = b.step("run01", "Run day 01");
-    run01_step.dependOn(&run01_cmd.step);
+    const mode = b.standardReleaseOptions();
+    const exe = b.addExecutable("advent", src);
+    exe.setBuildMode(mode);
+    exe.install();
+    const exe_run = exe.run();
+    const exe_step = b.step("run", "Run the executable");
+    exe_step.dependOn(&exe_run.step);
 }
