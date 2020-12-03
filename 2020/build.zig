@@ -1,7 +1,7 @@
 const Builder = @import("std").build.Builder;
 
 pub fn build(b: *Builder) !void {
-    const src = "src/day_02.zig";
+    const src = "src/day_03.zig";
 
     const mode = b.standardReleaseOptions();
     const exe = b.addExecutable("advent", src);
