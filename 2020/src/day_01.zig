@@ -17,8 +17,8 @@ pub fn main() !void {
         try values.append(try std.fmt.parseInt(i32, trimmed, 10));
     }
 
-    outer1: for (values.items) |i| {
-        for (values.items) |j| {
+    outer1: for (values.items) |i, it| {
+        for (values.items[(it+1)..]) |j| {
             if (i + j == 2020) {
                 std.debug.print("Day 01 - Solution 1: {} * {} = {}\n", .{ i, j, i * j });
                 break :outer1;
@@ -26,12 +26,12 @@ pub fn main() !void {
         }
     }
 
-    outer2: for (values.items) |i| {
-        for (values.items) |j| {
+    outer2: for (values.items) |i, iit| {
+        for (values.items[iit+1..]) |j, jit| {
             if (i + j >= 2020)
                 continue;
 
-            for (values.items) |k| {
+            for (values.items[jit+1..]) |k| {
                 if (i + j + k == 2020) {
                     std.debug.print("Day 01 - Solution 2: {} * {} * {} = {}\n", .{ i, j, k, i * j * k });
                     break :outer2;
