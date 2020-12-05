@@ -70,7 +70,7 @@ pub fn main() !void {
         std.debug.print("Day 04 - Solution 1: {}\n", .{passport_count});
     }
 
-    { // Solution 1
+    { // Solution 2
         var lines = std.mem.tokenize(input, "\n");
         var passport_count: i32 = 0;
         var completed = false;
