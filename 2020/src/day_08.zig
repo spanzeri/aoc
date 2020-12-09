@@ -1,5 +1,4 @@
 const std = @import("std");
-const hm = std.array_hash_map;
 const fs = std.fs;
 
 fn instToCode(inst: []const u8) i32 {
