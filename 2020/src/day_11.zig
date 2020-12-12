@@ -1,8 +1,5 @@
 const std = @import("std");
 const fs = std.fs;
-const sort = std.sort;
-
-const asc_u32 = sort.asc(u32);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
