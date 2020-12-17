@@ -113,7 +113,7 @@ pub fn main() !void {
                 try valid_tickets.append(ticket);
             }
         }
-        std.debug.print("Day 15 - Solution 1: {}\n", .{accum});
+        std.debug.print("Day 16 - Solution 1: {}\n", .{accum});
     }
 
     { // Solution two
