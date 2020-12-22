@@ -159,7 +159,7 @@ pub fn main() !void {
         }
 
         std.sort.sort(Match, matched.items, {}, matchLT);
-        print("Day 21 - Solution2: ", .{});
+        print("Day 21 - Solution 2: ", .{});
         for (matched.items) |m, mi| {
             if (mi == matched.items.len - 1) {
                 print("{}\n", .{m.ing});
