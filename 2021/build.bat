@@ -16,7 +16,7 @@ if "%1"=="release" (
 ) else (
     set "ccflags=-Od -MDd"
 )
-set "ccflags=%ccflags% -std:c11 -I%root% -W4 -WX"
+set "ccflags=%ccflags% -Zi -std:c11 -I%root% -W4 -WX"
 
 if not exist "%1" (
     echo Run the command:
@@ -31,7 +31,7 @@ if not exist "%tmpdir%" mkdir "%tmpdir%"
 
 pushd "%tmpdir%"
 
-cl -nologo %ccflags% "%1" -link -INCREMENTAL:NO -OUT:"%bindir%\aoc.exe" -PDB:aoc.pdb
+cl -nologo %ccflags% "%1" "%root%utils.c" -link -INCREMENTAL:NO -OUT:"%bindir%\aoc.exe" -PDB:aoc.pdb
 set ccresult=%ERRORLEVEL%
 
 popd
