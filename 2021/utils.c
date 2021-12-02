@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <ctype.h>
+
 #if !defined(_WIN32)
     #define fread_s(buffer, buf_size, size, count) fread(buffer, size, count)
 #endif
@@ -77,4 +79,43 @@ bool parser_consume_line(ParserContext *ctx)
         at++;
     ctx->current = at;
     return !parser_eof(ctx);
+}
+
+bool parser_consume_whites(ParserContext *ctx)
+{
+    for (;;) {
+        if (parser_eof(ctx))
+            return false;
+        if (*ctx->current != ' ' || *ctx->current != '\t')
+            break;
+        ctx->current++;
+    }
+    return true;
+}
+
+bool parser_read_identifier(ParserContext *ctx, String *result)
+{
+    if (parser_eof(ctx) || !isalnum(*ctx->current))
+        return false;
+
+    const char *first = ctx->current;
+    size_t size = 0;
+
+    for (;;) {
+        if (parser_eof(ctx) || !isalnum(*ctx->current))
+            break;
+        ctx->current++;
+        size++;
+    }
+    *result = (String){first, size};
+    return true;
+}
+
+int string_compare(String a, String b)
+{
+    if (a.data == NULL || b.data == NULL)
+        return -1;
+    if (a.size != b.size)
+        return a.data[0] < b.data[0] ? -1 : 1;
+    return memcmp(a.data, b.data, a.size);
 }
