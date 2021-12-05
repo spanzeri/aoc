@@ -58,18 +58,6 @@ bool parser_eof(ParserContext *ctx)
     return ctx->current == ctx->end;
 }
 
-bool parser_read_int(ParserContext *ctx, int *result)
-{
-    char *endptr;
-    long int tmp = strtol(ctx->current, &endptr, 10);
-    if (endptr == NULL || endptr == ctx->current)
-        return false;
-
-    ctx->current = endptr;
-    *result = (int)tmp;
-    return true;
-}
-
 bool parser_consume_line(ParserContext *ctx)
 {
     const char *at = ctx->current;
@@ -93,6 +81,18 @@ bool parser_consume_whites(ParserContext *ctx)
     return true;
 }
 
+bool parser_read_int(ParserContext *ctx, int *result)
+{
+    char *endptr;
+    long int tmp = strtol(ctx->current, &endptr, 10);
+    if (endptr == NULL || endptr == ctx->current)
+        return false;
+
+    ctx->current = endptr;
+    *result = (int)tmp;
+    return true;
+}
+
 bool parser_read_identifier(ParserContext *ctx, String *result)
 {
     if (parser_eof(ctx) || !isalnum(*ctx->current))
@@ -111,11 +111,72 @@ bool parser_read_identifier(ParserContext *ctx, String *result)
     return true;
 }
 
+bool parser_read_char(ParserContext *ctx, char *result)
+{
+    if (parser_eof(ctx))
+        return false;
+    *result = *ctx->current++;
+    return true;
+}
+
 int string_compare(String a, String b)
 {
     if (a.data == NULL || b.data == NULL)
         return -1;
-    if (a.size != b.size)
+    if (a.len != b.len)
         return a.data[0] < b.data[0] ? -1 : 1;
-    return memcmp(a.data, b.data, a.size);
+    return memcmp(a.data, b.data, a.len);
+}
+
+static int _dynarr_grow_capacity(int curr, int desired)
+{
+    int new_cap = curr + (curr >> 1);
+    if (curr == 0)
+        new_cap = MAX(DYNARR_INITIAL_SIZE, desired);
+
+    while (new_cap < desired)
+        new_cap += (new_cap >> 1);
+
+    return new_cap;
+}
+
+void *_dynarr_grow(struct DynArrHdr *prev, size_t element_size, int count)
+{
+    assert(count >= 0);
+
+    if (prev != NULL && prev->capacity >= prev->count + count)
+        return (prev + 1);
+
+    int new_cap = _dynarr_grow_capacity(prev ? prev->capacity : 0,
+                                        (prev ? prev->count : 0) + count);
+
+    struct DynArrHdr *new = malloc((size_t)new_cap * element_size + sizeof(struct DynArrHdr));
+    new->capacity = new_cap;
+    new->count = 0;
+
+    if (prev) {
+        assert(prev->count > 0 && prev->count < new_cap);
+        if (prev->count > 0)
+            memcpy(new + 1, prev + 1, element_size * (size_t)prev->count);
+        new->count = prev->count;
+        free(prev);
+    }
+
+    return (new + 1);
+}
+
+void *_dynarr_dup(struct DynArrHdr *a, size_t element_size)
+{
+    if (!a)
+        return NULL;
+
+    struct DynArrHdr *new = malloc((size_t)a->count * element_size + sizeof(struct DynArrHdr));
+    if (new) {
+        memcpy(new + 1, a + 1, element_size * (size_t)a->count);
+    }
+
+    new->count = a->count;
+    new->capacity = a->count;
+
+    return (new + 1);
 }
