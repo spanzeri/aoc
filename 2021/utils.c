@@ -119,6 +119,13 @@ bool parser_read_char(ParserContext *ctx, char *result)
     return true;
 }
 
+char parser_peek_char(ParserContext *ctx)
+{
+    if (parser_eof(ctx))
+        return EOF;
+    return *ctx->current;
+}
+
 int string_compare(String a, String b)
 {
     if (a.data == NULL || b.data == NULL)

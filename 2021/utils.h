@@ -44,6 +44,8 @@ bool parser_read_int(ParserContext *ctx, int *result);
 bool parser_read_identifier(ParserContext *ctx, String *result);
 bool parser_read_char(ParserContext *ctx, char *result);
 
+char parser_peek_char(ParserContext *ctx);
+
 int string_compare(String a, String b);
 
 static inline bool string_equal(String a, String b) { return string_compare(a, b) == 0; }
