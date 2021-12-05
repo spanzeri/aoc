@@ -74,7 +74,7 @@ bool parser_consume_whites(ParserContext *ctx)
     for (;;) {
         if (parser_eof(ctx))
             return false;
-        if (*ctx->current != ' ' || *ctx->current != '\t')
+        if (*ctx->current != ' ' && *ctx->current != '\t')
             break;
         ctx->current++;
     }

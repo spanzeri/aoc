@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <math.h>
 
 #define ERR(...)                      \
     do                                \
@@ -16,6 +17,13 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#define SWAP(Type, a, b) \
+    {                    \
+        Type tmp = a;    \
+        a = b;           \
+        b = tmp;         \
+    }
 
 typedef struct ParserContext {
     const char *current;
