@@ -52,6 +52,8 @@ bool parser_read_int(ParserContext *ctx, int *result);
 bool parser_read_identifier(ParserContext *ctx, String *result);
 bool parser_read_char(ParserContext *ctx, char *result);
 
+int *parser_parse_as_csv(ParserContext *csv);
+
 char parser_peek_char(ParserContext *ctx);
 
 int string_compare(String a, String b);

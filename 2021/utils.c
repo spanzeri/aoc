@@ -119,6 +119,24 @@ bool parser_read_char(ParserContext *ctx, char *result)
     return true;
 }
 
+int *parser_parse_as_csv(ParserContext *ctx)
+{
+    int *result = NULL;
+    while (!parser_eof(ctx)) {
+        int v = 0;
+        if (parser_read_int(ctx, &v))
+            dynarr_push(result, v);
+        if (!parser_consume_whites(ctx))
+            break;
+        char c;
+        if (!parser_read_char(ctx, &c) || c != ',')
+            break;
+        if (!parser_consume_whites(ctx))
+            break;
+    }
+    return result;
+}
+
 char parser_peek_char(ParserContext *ctx)
 {
     if (parser_eof(ctx))
