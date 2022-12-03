@@ -22,8 +22,6 @@ void solution1()
 	if (!input.is_open())
 		fatal_error("Missing file: {}", filename);
 
-	// S
-
 	long long sum = 0;
 	long long max = 0;
 

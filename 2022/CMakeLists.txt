@@ -49,3 +49,4 @@ macro(add_day day_num)
 endmacro()
 
 add_day(1)
+add_day(2)

@@ -62,4 +62,23 @@ T* end(T (&arr)[N])
 	return &arr[N - 1] + 1;
 }
 
+#if defined(__GNUC__) || defined(__clang__)
+	#define FORCEINLINE inline __attribute__((always_inline))
+#elif defined(_MSC_VER)
+	#define FORCEINLINE __forceinline
+#else
+	#define FORCEINLINE inline
 #endif
+
+[[noreturn]] FORCEINLINE void unreacheable()
+{
+#if defined(__GNUC__) || defined(__clang__)
+	__builtin_unreachable();
+#elif defined(_MSC_VER)
+	__assume(0);
+#else
+	assert(0);
+#endif
+}
+
+#endif // INCLUDED_COMMON_H
