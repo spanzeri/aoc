@@ -81,4 +81,13 @@ T* end(T (&arr)[N])
 #endif
 }
 
+std::string_view parse_value(std::string_view in, auto& out_val)
+{
+	auto [ptr, ec] = std::from_chars(in.data(), in.data() + in.size(), out_val);
+	if (ec != std::errc())
+		return in;
+
+	return std::string_view{ptr, in.size() - (ptr - in.data())};
+}
+
 #endif // INCLUDED_COMMON_H
