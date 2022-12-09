@@ -90,4 +90,48 @@ std::string_view parse_value(std::string_view in, auto& out_val)
 	return std::string_view{ptr, in.size() - (ptr - in.data())};
 }
 
+struct vec2i {
+	int x = 0;
+	int y = 0;
+
+	friend auto operator+(vec2i a, vec2i b) -> vec2i {
+		return { a.x + b.x, a.y + b.y };
+	}
+
+	friend auto operator-(vec2i a, vec2i b) -> vec2i {
+		return { a.x - b.x, a.y - b.y };
+	}
+
+	friend auto operator+=(vec2i &a, vec2i b) { a = a + b; }
+	friend auto operator-=(vec2i &a, vec2i b) { a = a - b; }
+
+	friend auto operator==(vec2i a, vec2i b) -> bool { return a.x == b.x && a.y == b.y; }
+	friend auto operator!=(vec2i a, vec2i b) -> bool { return !(a == b); }
+
+	friend auto min(vec2i a, vec2i b) -> vec2i {
+		return {std::min(a.x, b.x), std::min(a.y, b.y)};
+	}
+
+	friend auto max(vec2i a, vec2i b) -> vec2i {
+		return {std::max(a.x, b.x), std::max(a.y, b.y)};
+	}
+};
+
+template <std::signed_integral T>
+constexpr auto sign(T i) {
+	return i > 0 ? static_cast<T>(1) : static_cast<T>(-1);
+}
+
+namespace std {
+
+template <>
+struct hash<vec2i>
+{
+	std::size_t operator()(vec2i v) const {
+		return hash<int64_t>()(static_cast<int64_t>(v.x) + (static_cast<int64_t>(v.y) << 32));
+	}
+};
+
+} // end namespace std
+
 #endif // INCLUDED_COMMON_H
