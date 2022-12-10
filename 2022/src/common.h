@@ -8,6 +8,7 @@
 #include <iostream>
 #include <exception>
 #include <sstream>
+#include <type_traits>
 
 // Written for simplicity, not performance.
 
