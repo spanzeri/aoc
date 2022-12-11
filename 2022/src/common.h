@@ -91,6 +91,33 @@ std::string_view parse_value(std::string_view in, auto& out_val)
 	return std::string_view{ptr, in.size() - (ptr - in.data())};
 }
 
+std::string_view trim_left(std::string_view in)
+{
+	if (in.empty())
+		return in;
+
+	auto it = begin(in);
+	while (*it == ' ')
+		++it;
+	return {it, end(in)};
+}
+
+std::string_view trim_right(std::string_view in)
+{
+	if (in.empty())
+		return in;
+
+	auto it = end(in) - 1;
+	while (*it == ' ')
+		--it;
+	return {begin(in), it + 1};
+}
+
+std::string_view trim(std::string_view in)
+{
+	return trim_left(trim_right(in));
+}
+
 struct vec2i {
 	int x = 0;
 	int y = 0;
