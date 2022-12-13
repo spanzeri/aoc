@@ -82,7 +82,7 @@ T* end(T (&arr)[N])
 #endif
 }
 
-std::string_view parse_value(std::string_view in, auto& out_val)
+constexpr std::string_view parse_value(std::string_view in, auto& out_val)
 {
 	auto [ptr, ec] = std::from_chars(in.data(), in.data() + in.size(), out_val);
 	if (ec != std::errc())
@@ -91,7 +91,7 @@ std::string_view parse_value(std::string_view in, auto& out_val)
 	return std::string_view{ptr, in.size() - (ptr - in.data())};
 }
 
-std::string_view trim_left(std::string_view in)
+constexpr std::string_view trim_left(std::string_view in)
 {
 	if (in.empty())
 		return in;
@@ -102,7 +102,7 @@ std::string_view trim_left(std::string_view in)
 	return {it, end(in)};
 }
 
-std::string_view trim_right(std::string_view in)
+constexpr std::string_view trim_right(std::string_view in)
 {
 	if (in.empty())
 		return in;
@@ -113,7 +113,7 @@ std::string_view trim_right(std::string_view in)
 	return {begin(in), it + 1};
 }
 
-std::string_view trim(std::string_view in)
+constexpr std::string_view trim(std::string_view in)
 {
 	return trim_left(trim_right(in));
 }
