@@ -147,6 +147,8 @@ struct vec2i {
 
 template <std::signed_integral T>
 constexpr auto sign(T i) {
+	if (i == 0)
+		return 0;
 	return i > 0 ? static_cast<T>(1) : static_cast<T>(-1);
 }
 
