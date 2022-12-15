@@ -9,6 +9,7 @@
 #include <exception>
 #include <sstream>
 #include <type_traits>
+#include <chrono>
 
 // Written for simplicity, not performance.
 
@@ -122,28 +123,34 @@ struct vec2i {
 	int x = 0;
 	int y = 0;
 
-	friend auto operator+(vec2i a, vec2i b) -> vec2i {
+	friend constexpr auto operator+(vec2i a, vec2i b) -> vec2i {
 		return { a.x + b.x, a.y + b.y };
 	}
 
-	friend auto operator-(vec2i a, vec2i b) -> vec2i {
+	friend constexpr auto operator-(vec2i a, vec2i b) -> vec2i {
 		return { a.x - b.x, a.y - b.y };
 	}
 
-	friend auto operator+=(vec2i &a, vec2i b) { a = a + b; }
-	friend auto operator-=(vec2i &a, vec2i b) { a = a - b; }
+	friend constexpr auto operator+=(vec2i &a, vec2i b) { a = a + b; }
+	friend constexpr auto operator-=(vec2i &a, vec2i b) { a = a - b; }
 
-	friend auto operator==(vec2i a, vec2i b) -> bool { return a.x == b.x && a.y == b.y; }
-	friend auto operator!=(vec2i a, vec2i b) -> bool { return !(a == b); }
+	friend constexpr auto operator==(vec2i a, vec2i b) -> bool { return a.x == b.x && a.y == b.y; }
+	friend constexpr auto operator!=(vec2i a, vec2i b) -> bool { return !(a == b); }
 
-	friend auto min(vec2i a, vec2i b) -> vec2i {
+	friend constexpr auto min(vec2i a, vec2i b) -> vec2i {
 		return {std::min(a.x, b.x), std::min(a.y, b.y)};
 	}
 
-	friend auto max(vec2i a, vec2i b) -> vec2i {
+	friend constexpr auto max(vec2i a, vec2i b) -> vec2i {
 		return {std::max(a.x, b.x), std::max(a.y, b.y)};
 	}
 };
+
+inline int manhattan_distance(vec2i lhs, vec2i rhs)
+{
+	vec2i diff = rhs - lhs;
+	return std::abs(diff.x) + std::abs(diff.y);
+}
 
 template <std::signed_integral T>
 constexpr auto sign(T i) {
@@ -163,5 +170,23 @@ struct hash<vec2i>
 };
 
 } // end namespace std
+
+struct SimpleTimer
+{
+	explicit SimpleTimer(std::string_view name)
+		: name{name}
+	{
+		start = std::chrono::steady_clock::now();
+	}
+
+	~SimpleTimer()
+	{
+		auto end = std::chrono::steady_clock::now();
+		println(" Time [{}] = {}ms", name, std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+	}
+
+	std::chrono::time_point<std::chrono::steady_clock> start;
+	std::string name;
+};
 
 #endif // INCLUDED_COMMON_H
