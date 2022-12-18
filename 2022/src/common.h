@@ -152,24 +152,65 @@ inline int manhattan_distance(vec2i lhs, vec2i rhs)
 	return std::abs(diff.x) + std::abs(diff.y);
 }
 
-template <std::signed_integral T>
-constexpr auto sign(T i) {
-	if (i == 0)
-		return 0;
-	return i > 0 ? static_cast<T>(1) : static_cast<T>(-1);
-}
+struct vec3i {
+	int x = 0;
+	int y = 0;
+	int z = 0;
 
+	friend constexpr auto operator+(vec3i a, vec3i b) -> vec3i {
+		return { a.x + b.x, a.y + b.y, a.z + b.z };
+	}
+
+	friend constexpr auto operator-(vec3i a, vec3i b) -> vec3i {
+		return { a.x - b.x, a.y - b.y, a.z - b.z };
+	}
+
+	friend constexpr auto operator+=(vec3i &a, vec3i b) { a = a + b; }
+	friend constexpr auto operator-=(vec3i &a, vec3i b) { a = a - b; }
+
+	friend constexpr auto operator==(vec3i a, vec3i b) -> bool { return a.x == b.x && a.y == b.y && a.z == b.z; }
+	friend constexpr auto operator!=(vec3i a, vec3i b) -> bool { return !(a == b); }
+
+	friend constexpr auto min(vec3i a, vec3i b) -> vec3i {
+		return {std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
+	}
+
+	friend constexpr auto max(vec3i a, vec3i b) -> vec3i {
+		return {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
+	}
+};
+
+inline int manhattan_distance(vec3i lhs, vec3i rhs)
+{
+	vec3i diff = rhs - lhs;
+	return std::abs(diff.x) + std::abs(diff.y) + std::abs(diff.z);
+}
 namespace std {
 
 template <>
 struct hash<vec2i>
 {
 	std::size_t operator()(vec2i v) const {
-		return hash<int64_t>()(static_cast<int64_t>(v.x) + (static_cast<int64_t>(v.y) << 32));
+		return hash<int64_t>()(v.x + (static_cast<int64_t>(v.y) << 32));
+	}
+};
+
+template <>
+struct hash<vec3i>
+{
+	std::size_t operator()(vec3i v) const {
+		return hash<int>()(v.x) ^ hash<int>()(v.y) ^ hash<int>()(v.z);
 	}
 };
 
 } // end namespace std
+
+template <std::signed_integral T>
+constexpr auto sign(T i) {
+	if (i == 0)
+		return 0;
+	return i > 0 ? static_cast<T>(1) : static_cast<T>(-1);
+}
 
 struct SimpleTimer
 {
