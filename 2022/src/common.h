@@ -230,4 +230,20 @@ struct SimpleTimer
 	std::string name;
 };
 
+template <typename ArrayT, size_t N>
+constexpr size_t countof(ArrayT(&)[N]) {
+	return N;
+}
+
+template <typename ArrayT, size_t N>
+constexpr auto array_min(ArrayT (&arr)[N]) {
+	if constexpr (N == 0)
+		return ArrayT{};
+
+	auto minv = arr[0];
+	for (size_t i = 1; i < N; i++)
+		minv = std::min(minv, arr[i]);
+	return minv;
+}
+
 #endif // INCLUDED_COMMON_H
