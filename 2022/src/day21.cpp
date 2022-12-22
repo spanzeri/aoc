@@ -210,6 +210,7 @@ int64_t solve2(std::string_view name, std::unordered_map<std::string, Monkey>& m
 	bool humn_left  = !solve2_eq(eq.lhs, monkeys, math_ops, variables, lhs);
 	bool humn_right = !solve2_eq(eq.rhs, monkeys, math_ops, variables, rhs);
 	assert(humn_left != humn_right);
+	(void)humn_right;
 
 	int64_t matchv = humn_left ? rhs : lhs;
 

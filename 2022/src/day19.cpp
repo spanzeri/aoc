@@ -47,7 +47,7 @@ struct State {
 
 bool operator==(const State& a, const State& b) {
 	for (int i = 0; i < Material::COUNT; i++)
-		if (a.robots[i] != b.robots[i] && a.resources[i] != b.resources[i])
+		if (a.robots[i] != b.robots[i] || a.resources[i] != b.resources[i])
 			return false;
 	return a.time == b.time;
 }
@@ -123,39 +123,74 @@ Blueprint parse_blueprint(std::string_view src) {
 	}
 }
 
+void mine(State& state) {
+	for (int i = 0; i < Material::COUNT; i++)
+		state.resources[i] += state.robots[i];
+	++state.time;
+}
+
+#if 0
+
 int solve_1bp(const Blueprint& bp, int time)
 {
 	int max_geodes = 0;
 
-	int max_robots[Material::COUNT];
-	max_robots[Geode] = INT_MAX;
+	int maxes[Material::COUNT];
 	for (int i = 0; i < Material::COUNT; i++)
-		max_robots[Ore] = std::max(max_robots[Ore], bp.costs[i][0]);
-	for (int i = 1; i < Material::Geode; i++)
-		max_robots[i] = bp.costs[i + 1][1];
+		maxes[0] = std::max(maxes[0], bp.costs[i][0]);
+	for (int i = Clay; i < Geode; i++) {
+		maxes[i] = bp.costs[i + 1][1];
+	}
+	maxes[Geode] = INT_MAX;
 
-	State init_state = {};
-	init_state.robots[Ore] = 1;
-
-	std::vector<State> states;
-	states.push_back(init_state);
-
-	std::unordered_set<State> state_cache;
-
-	auto mine = [](State &state) {
-		for (int i = 0; i < Material::COUNT; ++i)
-			state.resources[i] += state.robots[i];
-		state.time += 1;
+	auto can_build_robot = [&](State &state, int mat) {
+		if (state.resources[Ore] < bp.costs[mat][0])
+			return false;
+		return mat > Clay ? state.resources[mat - 1] >= bp.costs[mat][1] : true;
 	};
 
-	while (!states.empty())
-	{
-		State prev = states.back();
-		states.pop_back();
+	auto should_build_robot = [&](State &state, int mat) {
+		if (state.robots[mat] >= maxes[mat])
+			return false;
+		if (mat == Geode)
+			return state.time < time;
+		if (mat == Ore || mat == Obsidian)
+			return state.time < time - 1;
+		return state.time < time - 2;
+	};
 
-		// Advance the state
-		State curr = prev;
-		mine(curr);
+	auto should_build_any = [&](State &state) {
+		return (can_build_robot(state, Ore) && should_build_robot(state, Ore)) ||
+		       (can_build_robot(state, Clay) && should_build_robot(state, Clay)) ||
+		       (can_build_robot(state, Obsidian) && should_build_robot(state, Obsidian)) ||
+		       (can_build_robot(state, Geode) && should_build_robot(state, Geode));
+	};
+
+	auto build_robot = [&](State &state, int mat) {
+		state.resources[Ore] -= bp.costs[mat][0];
+		if (mat > Clay)
+			state.resources[mat - 1] -= bp.costs[mat][1];
+		mine(state);
+		state.robots[mat] += 1;
+	};
+
+	State init = {};
+	init.robots[Ore] = 1;
+
+	std::queue<State> states;
+	states.push(init);
+	std::unordered_set<State> state_cache;
+
+	while (!states.empty()) {
+		State curr = states.front();
+		states.pop();
+
+		while (curr.time < time && !should_build_any(curr))
+			mine(curr);
+
+		if (state_cache.contains(curr))
+			continue;
+		state_cache.insert(curr);
 
 		if (curr.time == time) {
 			if (curr.resources[Geode] > max_geodes)
@@ -163,42 +198,151 @@ int solve_1bp(const Blueprint& bp, int time)
 			continue;
 		}
 
-		// Push a state where we do nothing
-		if (!state_cache.contains(curr)) {
-			states.push_back(curr);
-			state_cache.insert(curr);
-		}
+		bool built_geode = false;
 
-		// Build a robot. Skip if we have too many for a type or if we could have
-		// built it in the previous state and decided not to (as it wouldn't make sense)
-		for (int i = 0; i < Material::COUNT; i++)
-		{
-			if (curr.time >= time - 2)
-				continue;
-			if (curr.robots[i] == max_robots[i])
-				continue;
-			if (curr.resources[Ore] < bp.costs[i][0] || (i > Clay && curr.resources[i - 1] < bp.costs[i][1]))
-				continue;
-			if (prev.resources[Ore] >= bp.costs[i][0] && (i <= Clay || prev.resources[i - 1] >= bp.costs[i][1]))
-				continue;
-
-			// Build the robot
-			State curr_with_robot = curr;
-			curr_with_robot.resources[Ore] -= bp.costs[i][0];
-			if (i > Clay)
-				curr_with_robot.resources[i - 1] -= bp.costs[i][1];
-			curr_with_robot.robots[i] += 1;
-			mine(curr_with_robot);
-
-			if (!state_cache.contains(curr_with_robot)) {
-				states.push_back(curr_with_robot);
-				state_cache.insert(curr_with_robot);
+		for (int i = Material::COUNT - 1; i >= 0; --i) {
+			if (can_build_robot(curr, i) && should_build_robot(curr, i)) {
+				State next = curr;
+				build_robot(next, i);
+				states.push(next);
+				if (i == Geode) {
+					built_geode = true;
+					break;
+				}
 			}
 		}
+		if (built_geode)
+			continue;
+
+		mine(curr);
+		states.push(curr);
 	}
 
 	return max_geodes;
 }
+
+#else
+
+int solve_1bp(const Blueprint& bp, int time)
+{
+	int max_geodes = 0;
+
+	int maxes[Material::COUNT];
+	for (int i = 0; i < Material::COUNT; i++)
+		maxes[0] = std::max(maxes[0], bp.costs[i][0]);
+	for (int i = Clay; i < Geode; i++) {
+		maxes[i] = bp.costs[i + 1][1];
+	}
+	maxes[Geode] = INT_MAX;
+
+	auto compute_time_needed_before = [&](int mat) {
+		int target = bp.costs[mat + 1][1];
+		int i = 0;
+		int accum = 0;
+		for (;;) {
+			++i;
+			accum += i;
+			if (accum > target)
+				break;
+		}
+		return i;
+	};
+	int latests[Material::COUNT];
+	latests[Geode] = time - 1;
+	latests[Ore] = time - 2;
+	latests[Obsidian] = latests[Geode] - compute_time_needed_before(Obsidian);
+	latests[Clay] = latests[Obsidian] - compute_time_needed_before(Clay);
+
+	auto is_too_late_with_robots = [&](const State &state) {
+		for (int i = 0; i < Material::COUNT; i++) {
+			if (state.robots[i] == 0 && state.time >= latests[i])
+				return true;
+		}
+		return false;
+	};
+
+	auto can_build_robot = [&](State &state, int mat) {
+		if (state.resources[Ore] < bp.costs[mat][0])
+			return false;
+		return mat > Clay ? state.resources[mat - 1] >= bp.costs[mat][1] : true;
+	};
+
+	auto should_build_robot = [&](State &state, int mat) {
+		if (state.robots[mat] >= maxes[mat])
+			return false;
+		if (mat == Geode)
+			return state.time < time;
+		if (mat == Ore || mat == Obsidian)
+			return state.time < time - 1;
+		return state.time < time - 2;
+	};
+
+	auto should_build_any = [&](State &state) {
+		return (can_build_robot(state, Ore) && should_build_robot(state, Ore)) ||
+		       (can_build_robot(state, Clay) && should_build_robot(state, Clay)) ||
+		       (can_build_robot(state, Obsidian) && should_build_robot(state, Obsidian)) ||
+		       (can_build_robot(state, Geode) && should_build_robot(state, Geode));
+	};
+
+	auto build_robot = [&](State &state, int mat) {
+		state.resources[Ore] -= bp.costs[mat][0];
+		if (mat > Clay)
+			state.resources[mat - 1] -= bp.costs[mat][1];
+		mine(state);
+		state.robots[mat] += 1;
+	};
+
+	State init = {};
+	init.robots[Ore] = 1;
+
+	std::queue<State> states;
+	states.push(init);
+	std::unordered_set<State> state_cache;
+
+	while (!states.empty()) {
+		State curr = states.front();
+		states.pop();
+
+		while (curr.time < time && !should_build_any(curr))
+			mine(curr);
+
+		if (state_cache.contains(curr))
+			continue;
+		state_cache.insert(curr);
+
+		if (curr.time == time) {
+			if (curr.resources[Geode] > max_geodes)
+				max_geodes = curr.resources[Geode];
+			continue;
+		}
+
+		if (is_too_late_with_robots(curr))
+			continue;
+
+		bool built_geode = false;
+
+		for (int i = Material::COUNT - 1; i >= 0; --i) {
+			if (can_build_robot(curr, i) && should_build_robot(curr, i)) {
+				State next = curr;
+				build_robot(next, i);
+				states.push(next);
+				if (i == Geode) {
+					built_geode = true;
+					break;
+				}
+			}
+		}
+		if (built_geode)
+			continue;
+
+		mine(curr);
+		states.push(curr);
+	}
+
+	return max_geodes;
+}
+
+#endif
 
 int solve(std::vector<Blueprint>& bps, int time) {
 	int result = 0;
@@ -232,6 +376,19 @@ void solution1()
 	println("Solution1: {}", solve(bps, 24));
 }
 
+int solve2(std::vector<Blueprint>& bps, int time) {
+	int result = 1;
+	for (int i = 0; i < 3; i++)
+	{
+		auto &bp = bps[i];
+		int max = solve_1bp(bp, time);
+		println("Max geode for blueprint: {} = {}, Quality score: {}", bp.index, max, bp.index * max);
+		result *= max;
+	}
+
+	return result;
+}
+
 void solution2()
 {
 	std::string_view filename{"input/day19.txt"};
@@ -239,5 +396,15 @@ void solution2()
 	if (!input.is_open())
 		fatal_error("Missing file: {}", filename);
 
-	println("Solution2: {}", 0);
+	std::vector<Blueprint> bps;
+
+	std::string line;
+	while (input) {
+		std::getline(input, line);
+		if (line.empty())
+			continue;
+		bps.push_back(parse_blueprint(line));
+	}
+
+	println("Solution2: {}", solve2(bps, 32));
 }
