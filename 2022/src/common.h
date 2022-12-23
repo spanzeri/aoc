@@ -10,6 +10,7 @@
 #include <sstream>
 #include <type_traits>
 #include <chrono>
+#include <cassert>
 
 // Written for simplicity, not performance.
 
@@ -77,6 +78,7 @@ T* end(T (&arr)[N])
 #if defined(__GNUC__) || defined(__clang__)
 	__builtin_unreachable();
 #elif defined(_MSC_VER)
+	assert(0);
 	__assume(0);
 #else
 	assert(0);
@@ -144,6 +146,8 @@ struct vec2i {
 	friend constexpr auto max(vec2i a, vec2i b) -> vec2i {
 		return {std::max(a.x, b.x), std::max(a.y, b.y)};
 	}
+
+	friend constexpr auto operator*(vec2i v, int s) -> vec2i { return {v.x * s, v.y * s}; }
 };
 
 inline int manhattan_distance(vec2i lhs, vec2i rhs)
