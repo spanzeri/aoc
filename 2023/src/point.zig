@@ -12,5 +12,9 @@ pub fn Point2(comptime T: type) type {
         pub fn sub(a: Self, b: Self) Self {
             return Self { .x = a.x - b.x, .y = a.y - b.y };
         }
+
+        pub fn eql(a: Self, b: Self) bool {
+            return a.x == b.x and a.y == b.y;
+        }
     };
 }

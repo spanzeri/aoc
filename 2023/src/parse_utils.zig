@@ -21,7 +21,7 @@ pub const NonEmptyLineIterator = struct {
     }
 
     pub fn next(self: *Self) ?[]const u8 {
-        var line = self.peek() orelse return null;
+        const line = self.peek() orelse return null;
         self.index = self.get_next_eol() + 1;
         return line;
     }
