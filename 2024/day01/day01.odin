@@ -1,19 +1,15 @@
-package day_01
+package day01
 
 import "core:strings"
 import "core:strconv"
-import "core:os"
 import "core:fmt"
 import "core:math"
 import "core:slice"
+import "utils:utils"
 
 main :: proc() {
-    data, ok := os.read_entire_file("input/day01.txt")
-    if !ok {
-        fmt.println("Failed to read file")
-        return
-    }
-    defer delete(data)
+    lines := utils.get_input_lines("day01/input.txt") or_return
+    defer delete(lines)
 
     l1 := [dynamic]int{}
     l2 := [dynamic]int{}
@@ -22,17 +18,20 @@ main :: proc() {
         delete(l2)
     }
 
-    it := string(data)
-    for line in strings.split_lines(it) {
-        if (len(line) == 0) { continue }
-        i1, i2 := parse_line(line)
+    for line in lines {
+        if len(line) == 0 { continue }
+        parts := strings.split(line, "   ")
+        assert(len(parts) == 2)
+        i1, ok1 := strconv.parse_int(parts[0])
+        i2, ok2 := strconv.parse_int(parts[1])
+        assert(ok1)
+        assert(ok2)
         append(&l1, i1)
         append(&l2, i2)
     }
 
     slice.sort(l1[:])
     slice.sort(l2[:])
-    assert(len(l1) == len(l2))
 
     result1 := 0
     for i in 0..<len(l1) {
@@ -72,19 +71,4 @@ main :: proc() {
     }
 
     fmt.println("Day 01 - Solution 02: ", result2)
-}
-
-parse_line :: proc(line: string) -> (int, int) {
-    my_line := line
-    count := 0
-    values := [2]int{}
-    for entry in strings.split_iterator(&my_line, " ") {
-        if len(entry) == 0 { continue }
-        assert(count < 2)
-        i, ok := strconv.parse_int(entry)
-        values[count] = i
-        count += 1
-    }
-
-    return values[0], values[1]
 }
