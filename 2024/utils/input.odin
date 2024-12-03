@@ -20,4 +20,3 @@ get_input_lines :: proc(file: string) -> ([]string, bool) #optional_ok {
     }
     return lines, true
 }
-
