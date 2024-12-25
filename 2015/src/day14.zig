@@ -73,7 +73,7 @@ pub fn solution2() !void {
         flying: bool = true,
     };
 
-    var stats = try gpa.alloc(Stats, rs.items.len);
+    const stats = try gpa.alloc(Stats, rs.items.len);
     defer gpa.free(stats);
 
     for (rs.items, stats) |r, *s| {
