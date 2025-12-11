@@ -74,6 +74,7 @@ count_neighbours :: proc(map_: [][]u8, row: int, col: int) -> int {
     return count
 }
 
+@(private="file")
 make_map :: proc(lines: []string) -> [][]u8 {
     height := len(lines)
     width := len(lines[0])
