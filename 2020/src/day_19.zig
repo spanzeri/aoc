@@ -1,31 +1,37 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 const print = std.debug.print;
 const mem = std.mem;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_19_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
 
-    var messages = std.ArrayList([]const u8).init(allocator);
-    defer messages.deinit();
+    const input = try fs.cwd().readFileAlloc(io, "data/input_19_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
-    var txt_rules = std.ArrayList([]const u8).init(allocator);
-    defer txt_rules.deinit();
+    var messages = std.ArrayList([]const u8).empty;
+    defer messages.deinit(allocator);
+
+    var txt_rules = std.ArrayList([]const u8).empty;
+    defer txt_rules.deinit(allocator);
 
     {
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.splitScalar(u8, input, '\n');
         while (lines.next()) |raw_line| {
             const line = std.mem.trim(u8, raw_line, " \r\n");
             if (line.len == 0) break;
 
-            var rule_it = std.mem.tokenize(line, ":");
+            var rule_it = std.mem.tokenizeScalar(u8, line, ':');
             const id = std.fmt.parseInt(usize, rule_it.next().?, 10) catch unreachable;
             if (id >= txt_rules.items.len) {
-                try txt_rules.resize(id + 1);
+                try txt_rules.resize(allocator, id + 1);
             }
             txt_rules.items[id] = std.mem.trim(u8, rule_it.next().?, " \r\n");
         }
@@ -33,7 +39,7 @@ pub fn main() !void {
         while (lines.next()) |raw_line| {
             const line = std.mem.trim(u8, raw_line, " \r\n");
             if (line.len == 0) continue;
-            try messages.append(line);
+            try messages.append(allocator, line);
         }
     }
 
@@ -42,7 +48,9 @@ pub fn main() !void {
     { // Solution one
         var count: u32 = 0;
         for (messages.items) |msg| {
-            if (trie.validWord(msg)) { count += 1; }
+            if (trie.validWord(msg)) {
+                count += 1;
+            }
         }
         std.debug.print("Day 19 - Solution 1: {}\n", .{count});
     }
@@ -52,94 +60,91 @@ pub fn main() !void {
     }
 }
 
-const NodeTag = enum {
-    value, rule
-};
+const NodeTag = enum { value, rule };
 
-const Node = union(NodeTag) {
-    value: u8,
-    rule: u8
-};
+const Node = union(NodeTag) { value: u8, rule: u8 };
 
 const ProcessedRule = struct {
     seqs: std.ArrayList(std.ArrayList(Node)),
+    allocator: std.mem.Allocator,
     const Self = @This();
 
-    pub fn fromText(a: *mem.Allocator, txt: []const u8) !Self {
-        var seqs = std.ArrayList(std.ArrayList(Node)).init(a);
-        var it = mem.tokenize(txt, "|");
+    pub fn fromText(a: std.mem.Allocator, txt: []const u8) !Self {
+        var seqs = std.ArrayList(std.ArrayList(Node)).empty;
+        var it = mem.tokenizeScalar(u8, txt, '|');
         while (it.next()) |raw_option| {
-            var option = std.ArrayList(Node).init(a);
-            var option_txt = mem.trim(u8, raw_option, " \r\n");
+            var option = std.ArrayList(Node).empty;
+            const option_txt = mem.trim(u8, raw_option, " \r\n");
             if (option_txt[0] == '\"') {
-                try option.append(Node{ .value = option_txt[1] });
-            }
-            else {
-                var rule_it = mem.tokenize(option_txt, " ");
+                try option.append(a, Node{ .value = option_txt[1] });
+            } else {
+                var rule_it = mem.tokenizeScalar(u8, option_txt, ' ');
                 while (rule_it.next()) |rule| {
-                    try option.append(Node{ .rule = try std.fmt.parseInt(u8, rule, 10) });
+                    try option.append(a, Node{ .rule = try std.fmt.parseInt(u8, rule, 10) });
                 }
             }
-            try seqs.append(option);
+            try seqs.append(a, option);
         }
-        return Self { .seqs = seqs };
+        return Self{ .seqs = seqs, .allocator = a };
     }
 
     pub fn deinit(s: *Self) void {
-        for (s.seqs.items) |_, seqi| {
-            s.seqs.items[seqi].deinit();
+        for (s.seqs.items, 0..) |_, seqi| {
+            s.seqs.items[seqi].deinit(s.allocator);
         }
-        s.seqs.deinit();
+        s.seqs.deinit(s.allocator);
     }
 
     pub fn print(s: *const Self) void {
-        for (s.seqs.items) |seq, i| {
+        for (s.seqs.items) |seq| {
             for (seq.items) |node| {
-                print("{} ", .{node});
+                std.debug.print("{} ", .{node});
             }
-            print(" | ", .{});
+            std.debug.print(" | ", .{});
         }
-        print("\n", .{});
+        std.debug.print("\n", .{});
     }
 };
 
-fn buildTries(a: *mem.Allocator, txtrules: [][]const u8) !Trie {
-    var rules = std.ArrayList(ProcessedRule).init(a);
+fn buildTries(a: std.mem.Allocator, txtrules: [][]const u8) !Trie {
+    var rules = std.ArrayList(ProcessedRule).empty;
     defer {
-        for (rules.items) |_, ri| { rules.items[ri].deinit(); }
-        rules.deinit();
+        for (rules.items, 0..) |_, ri| {
+            rules.items[ri].deinit();
+        }
+        rules.deinit(a);
     }
     for (txtrules) |txtrule| {
-        try rules.append(try ProcessedRule.fromText(a, txtrule));
+        try rules.append(a, try ProcessedRule.fromText(a, txtrule));
     }
 
-    var seqs = std.ArrayList(std.ArrayList(Node)).init(a);
-    defer seqs.deinit();
+    var seqs = std.ArrayList(std.ArrayList(Node)).empty;
+    defer seqs.deinit(a);
 
     const first = Node{ .rule = 0 };
-    var first_seq = std.ArrayList(Node).init(a);
-    try first_seq.append(first);
-    try seqs.append(first_seq);
+    var first_seq = std.ArrayList(Node).empty;
+    try first_seq.append(a, first);
+    try seqs.append(a, first_seq);
 
     var trie = Trie.init(a);
 
     outer: while (seqs.items.len > 0) {
-        const seq = seqs.items[seqs.items.len - 1];
-        defer seq.deinit();
-        try seqs.resize(seqs.items.len - 1);
+        var seq = seqs.items[seqs.items.len - 1];
+        defer seq.deinit(a);
+        try seqs.resize(a, seqs.items.len - 1);
 
-        for (seq.items) |node, ni| {
+        for (seq.items, 0..) |node, ni| {
             switch (node) {
                 NodeTag.rule => |nindex| {
-                    var rule = rules.items[@as(usize, nindex)];
+                    const rule = rules.items[@as(usize, nindex)];
                     // Make new sequences and add them to the list
                     for (rule.seqs.items) |option| {
-                        var new_nodes = std.ArrayList(Node).init(a);
-                        try new_nodes.resize(seq.items.len - 1 + option.items.len);
-                        mem.copy(Node, new_nodes.items[0..ni], seq.items[0..ni]);
-                        mem.copy(Node, new_nodes.items[ni..ni + option.items.len], option.items);
-                        mem.copy(Node, new_nodes.items[ni + option.items.len..], seq.items[ni+1..]);
-                        try seqs.append(new_nodes);
+                        var new_nodes = std.ArrayList(Node).empty;
+                        try new_nodes.resize(a, seq.items.len - 1 + option.items.len);
+                        @memcpy(new_nodes.items[0..ni], seq.items[0..ni]);
+                        @memcpy(new_nodes.items[ni .. ni + option.items.len], option.items);
+                        @memcpy(new_nodes.items[ni + option.items.len ..], seq.items[ni + 1 ..]);
+                        try seqs.append(a, new_nodes);
                     }
 
                     continue :outer;
@@ -150,13 +155,13 @@ fn buildTries(a: *mem.Allocator, txtrules: [][]const u8) !Trie {
 
         // If we get here, all the items in the sequence are values
         // print("Found sequence: ", .{});
-        // for (seq.items) |node, ni| {
+        // for (seq.items, 0..) |node, ni| {
         //     switch (node) {
         //         NodeTag.value => |v| { print("{c} ", .{v}); },
         //         NodeTag.rule => unreachable
         //     }
         // }
-        // print("\n", .{});
+        // std.debug.print("\n", .{});
 
         try trie.addSequence(seq.items);
     }
@@ -165,45 +170,42 @@ fn buildTries(a: *mem.Allocator, txtrules: [][]const u8) !Trie {
 }
 
 const Trie = struct {
-    const TrieNode = struct {
-        a: usize = 0,
-        b: usize = 0,
-        term: bool = false
-    };
+    const TrieNode = struct { a: usize = 0, b: usize = 0, term: bool = false };
     const Self = @This();
 
     nodes: std.ArrayList(TrieNode),
+    allocator: std.mem.Allocator,
 
-    pub fn init(a: *mem.Allocator) Self {
-        var s = Self{ .nodes = std.ArrayList(TrieNode).init(a) };
-        s.nodes.append(TrieNode{}) catch unreachable;
+    pub fn init(a: std.mem.Allocator) Self {
+        var s = Self{ .nodes = std.ArrayList(TrieNode).empty, .allocator = a };
+        s.nodes.append(a, TrieNode{}) catch unreachable;
         return s;
     }
 
     pub fn deinit(s: *Self) void {
-        nodes.deinit();
+        s.nodes.deinit(s.allocator);
     }
 
     pub fn addSequence(s: *Self, seqs: []Node) !void {
         var nodei: usize = 0;
-        for (seqs) |seq_node, seq_node_index| {
+        for (seqs, 0..) |seq_node, seq_node_index| {
             switch (seq_node) {
-            NodeTag.value => |v| {
-                if (v == 'a') {
-                    if (s.nodes.items[nodei].a == 0) {
-                        try s.nodes.append(TrieNode{});
-                        s.nodes.items[nodei].a = s.nodes.items.len - 1;
-                    }
-                    nodei = s.nodes.items[nodei].a;
-                } else if (v == 'b') {
-                    if (s.nodes.items[nodei].b == 0) {
-                        try s.nodes.append(TrieNode{});
-                        s.nodes.items[nodei].b = s.nodes.items.len - 1;
-                    }
-                    nodei = s.nodes.items[nodei].b;
-                } else unreachable;
-            },
-            NodeTag.rule => unreachable
+                NodeTag.value => |v| {
+                    if (v == 'a') {
+                        if (s.nodes.items[nodei].a == 0) {
+                            try s.nodes.append(s.allocator, TrieNode{});
+                            s.nodes.items[nodei].a = s.nodes.items.len - 1;
+                        }
+                        nodei = s.nodes.items[nodei].a;
+                    } else if (v == 'b') {
+                        if (s.nodes.items[nodei].b == 0) {
+                            try s.nodes.append(s.allocator, TrieNode{});
+                            s.nodes.items[nodei].b = s.nodes.items.len - 1;
+                        }
+                        nodei = s.nodes.items[nodei].b;
+                    } else unreachable;
+                },
+                NodeTag.rule => unreachable,
             }
             s.nodes.items[nodei].term = s.nodes.items[nodei].term or (seq_node_index == seqs.len - 1);
         }
@@ -211,56 +213,16 @@ const Trie = struct {
 
     pub fn validWord(s: *const Self, wrd: []const u8) bool {
         var node = &s.nodes.items[0];
-        for (wrd) |c, i| {
+        for (wrd, 0..) |c, i| {
             if (c == 'a') {
                 if (node.a == 0) return false;
                 node = &s.nodes.items[node.a];
-            }
-            else if (c == 'b') {
+            } else if (c == 'b') {
                 if (node.b == 0) return false;
                 node = &s.nodes.items[node.b];
             }
-            if (i == wrd.len -1) return node.term;
+            if (i == wrd.len - 1) return node.term;
         }
         unreachable;
     }
 };
-
-const hm = std.hash_map;
-
-const SubruleKind = enum {
-    subrule, terminal
-};
-const Subrule = union(SubruleKind) {
-    subrule: std.ArrayList(u8),
-    value: u8
-};
-
-fn buildRules(a: *mem.Allocator, txtrules: [][]const u8) void {
-    var temp = std.ArrayList(std.ArrayList(Subrule)).init(a);
-    defer {
-        for (temp.items) |rule| {
-            for (rule.items) |sub, subi| {
-                switch (sub) {
-                    SubruleKind.subroule => { rule.items[subi].deinit(); },
-                    SubruleKind.value => {}
-                }
-            }
-        rules.items[ri].deinit();
-    }
-        rules.deinit();
-    }
-    for (txtrules) |txtrule| {
-        try rules.append(try ProcessedRule.fromText(a, txtrule));
-    }
-
-    var subrule_map = hm.HashMap([]const u8, usize, hm.hashString, hm.eqlString, 80).init(a);
-    defer subrule_map.deinit();
-
-    while (true) {
-        var has_compressed = false;
-        for (rules.items) |ri| {
-
-        }
-    }
-}

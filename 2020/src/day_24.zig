@@ -1,58 +1,78 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 const mem = std.mem;
-const hm = std.hash_map;
 
 const print = std.debug.print;
 const assert = std.debug.assert;
 
-const BlackTileMap = hm.HashMap(Pos, bool, hashPos, eqlPos, 80);
+const PosContext = struct {
+    pub fn hash(_: PosContext, p: Pos) u64 {
+        return hashPos(p);
+    }
+
+    pub fn eql(_: PosContext, a: Pos, b: Pos) bool {
+        return eqlPos(a, b);
+    }
+};
+
+const BlackTileMap = std.HashMap(Pos, bool, PosContext, 80);
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_24_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const input = try fs.cwd().readFileAlloc(io, "data/input_24_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
     var black_tiles = BlackTileMap.init(allocator);
     defer black_tiles.deinit();
 
     { // Solution 1
-        var lines = mem.tokenize(input, "\n");
+        var lines = mem.tokenizeScalar(u8, input, '\n');
         while (lines.next()) |raw_line| {
             const line = mem.trim(u8, raw_line, " \r\n");
             if (line.len == 0) break;
 
             var p = Pos.init(0, 0);
-            { var i: usize = 0; while (i < line.len) : (i += 1) {
-                switch (line[i]) {
-                    'n' => {
-                        i += 1;
-                        p.y -= 1;
-                        if ((p.y & 1) == 0 and line[i] == 'e') {
+            {
+                var i: usize = 0;
+                while (i < line.len) : (i += 1) {
+                    switch (line[i]) {
+                        'n' => {
+                            i += 1;
+                            p.y -= 1;
+                            if ((p.y & 1) == 0 and line[i] == 'e') {
+                                p.x += 1;
+                            } else if ((p.y & 1) == 1 and line[i] == 'w') {
+                                p.x -= 1;
+                            }
+                        },
+                        's' => {
+                            i += 1;
+                            p.y += 1;
+                            if ((p.y & 1) == 0 and line[i] == 'e') {
+                                p.x += 1;
+                            } else if ((p.y & 1) == 1 and line[i] == 'w') {
+                                p.x -= 1;
+                            }
+                        },
+                        'e' => {
                             p.x += 1;
-                        }
-                        else if ((p.y & 1) == 1 and line[i] == 'w') {
+                        },
+                        'w' => {
                             p.x -= 1;
-                        }
-                    },
-                    's' => {
-                        i += 1;
-                        p.y += 1;
-                        if ((p.y & 1) == 0 and line[i] == 'e') {
-                            p.x += 1;
-                        }
-                        else if ((p.y & 1) == 1 and line[i] == 'w') {
-                            p.x -= 1;
-                        }
-                    },
-                    'e' => { p.x += 1; },
-                    'w' => { p.x -= 1; },
-                    else => unreachable
+                        },
+                        else => unreachable,
+                    }
                 }
-            }}
+            }
 
-            if (black_tiles.remove(p) == null) {
+            if (!black_tiles.remove(p)) {
                 try black_tiles.put(p, true);
                 //print("Flipped to black: ({}, {})\n", .{p.x, p.y});
             } else {
@@ -60,7 +80,7 @@ pub fn main() !void {
             }
         }
 
-        print("Day 24 - Solution 1: {}\n", .{ black_tiles.count() });
+        print("Day 24 - Solution 1: {}\n", .{black_tiles.count()});
     }
 
     { // Solution 2
@@ -100,7 +120,7 @@ const Pos = struct {
 
         pub fn next(r: *Range) ?Self {
             if (r.curr.y == r.last.y) return null;
-            var res = r.curr;
+            const res = r.curr;
             r.curr.x += 1;
             if (r.curr.x == r.last.x) {
                 r.curr.x = r.first_x;
@@ -132,7 +152,7 @@ const Floor = struct {
 
     const Self = @This();
 
-    pub fn init(a: *std.mem.Allocator) Self {
+    pub fn init(a: std.mem.Allocator) Self {
         return .{ .blacks = BlackTileMap.init(a) };
     }
 
@@ -140,7 +160,7 @@ const Floor = struct {
         var r = Self{ .blacks = try bts.clone() };
         var it = bts.iterator();
         while (it.next()) |entry| {
-            r.updateBounds(entry.key);
+            r.updateBounds(entry.key_ptr.*);
         }
         return r;
     }
@@ -150,10 +170,10 @@ const Floor = struct {
     }
 
     fn updateBounds(s: *Self, p: Pos) void {
-        s.min.x = std.math.min(s.min.x, p.x - 2);
-        s.min.y = std.math.min(s.min.y, p.y - 2);
-        s.max.x = std.math.max(s.max.x, p.x + 3);
-        s.max.y = std.math.max(s.max.y, p.y + 3);
+        s.min.x = @min(s.min.x, p.x - 2);
+        s.min.y = @min(s.min.y, p.y - 2);
+        s.max.x = @max(s.max.x, p.x + 3);
+        s.max.y = @max(s.max.y, p.y + 3);
     }
 
     fn insertBlack(s: *Self, p: Pos) !void {
@@ -162,7 +182,7 @@ const Floor = struct {
     }
 };
 
-fn updateFloor(a: *std.mem.Allocator, f: *Floor) !void {
+fn updateFloor(a: std.mem.Allocator, f: *Floor) !void {
     var range = f.min.range(f.max);
     var new_floor = Floor.init(a);
     // print("Updating between: ({}, {}) - ({}, {})\n", .{f.min.x, f.min.y, f.max.x, f.max.y});
@@ -174,8 +194,7 @@ fn updateFloor(a: *std.mem.Allocator, f: *Floor) !void {
             if (c == 1 or c == 2) {
                 try new_floor.insertBlack(pos);
             }
-        }
-        else {
+        } else {
             if (c == 2) {
                 try new_floor.insertBlack(pos);
             }
@@ -190,12 +209,11 @@ fn countBlackNeighbors(f: *const Floor, p: Pos) u32 {
     nb[0] = Pos.init(p.x - 1, p.y);
     nb[1] = Pos.init(p.x + 1, p.y);
     if ((p.y & 1) == 0) {
-        nb[2] = Pos.init(p.x - 1 , p.y - 1);
+        nb[2] = Pos.init(p.x - 1, p.y - 1);
         nb[3] = Pos.init(p.x, p.y - 1);
         nb[4] = Pos.init(p.x - 1, p.y + 1);
         nb[5] = Pos.init(p.x, p.y + 1);
-    }
-    else {
+    } else {
         nb[2] = Pos.init(p.x, p.y - 1);
         nb[3] = Pos.init(p.x + 1, p.y - 1);
         nb[4] = Pos.init(p.x, p.y + 1);

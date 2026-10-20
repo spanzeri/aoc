@@ -1,20 +1,26 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 const mem = std.mem;
 
 const print = std.debug.print;
 const assert = std.debug.assert;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_25_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const input = try fs.cwd().readFileAlloc(io, "data/input_25_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
     var card_pkey: u64 = 0;
     var door_pkey: u64 = 0;
     {
-        var lines = mem.tokenize(input, "\n");
+        var lines = mem.tokenizeScalar(u8, input, '\n');
         card_pkey = try std.fmt.parseInt(u64, mem.trim(u8, lines.next().?, " \r\n"), 10);
         door_pkey = try std.fmt.parseInt(u64, mem.trim(u8, lines.next().?, " \r\n"), 10);
     }
@@ -25,12 +31,12 @@ pub fn main() !void {
     { // Solution 1
         const card_loop_count = findLoopSize(7, card_pkey);
         const encription = computeLoop(door_pkey, card_loop_count);
-        print("Day 24 - Solution 1: {}\n", .{encription});
+        print("Day 25 - Solution 1: {}\n", .{encription});
         assert(encription == computeLoop(card_pkey, findLoopSize(7, door_pkey)));
     }
 
     { // Solution 2
-        print("Day 24 - Solution 2: {}\n", .{0});
+        print("Day 25 - Solution 2: {}\n", .{0});
     }
 }
 

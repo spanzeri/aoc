@@ -1,23 +1,29 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_11_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
 
-    var lines = std.mem.tokenize(input, "\n");
-    var input_sits = std.ArrayList(u8).init(allocator);
-    defer input_sits.deinit();
+    const input = try fs.cwd().readFileAlloc(io, "data/input_11_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
+
+    var lines = std.mem.tokenizeScalar(u8, input, '\n');
+    var input_sits = std.ArrayList(u8).empty;
+    defer input_sits.deinit(allocator);
 
     var stride: usize = 0;
 
     while (lines.next()) |raw_line| {
-        var line = std.mem.trim(u8, raw_line, " \r\n");
+        const line = std.mem.trim(u8, raw_line, " \r\n");
         if (line.len == 0)
             break;
-        try input_sits.appendSlice(line);
+        try input_sits.appendSlice(allocator, line);
         if (stride == 0) {
             stride = line.len;
         } else {
@@ -26,31 +32,28 @@ pub fn main() !void {
     }
 
     { // Solution 1
-        var sits = std.ArrayList(u8).init(allocator);
-        var next = std.ArrayList(u8).init(allocator);
-        defer sits.deinit();
-        defer next.deinit();
-        try sits.resize(input_sits.items.len);
-        try next.resize(input_sits.items.len);
-        std.mem.copy(u8, sits.items, input_sits.items);
-        std.mem.copy(u8, next.items, input_sits.items);
+        var sits = std.ArrayList(u8).empty;
+        var next = std.ArrayList(u8).empty;
+        defer sits.deinit(allocator);
+        defer next.deinit(allocator);
+        try sits.resize(allocator, input_sits.items.len);
+        try next.resize(allocator, input_sits.items.len);
+        @memcpy(sits.items, input_sits.items);
+        @memcpy(next.items, input_sits.items);
 
         var map_changed = true;
-        var count: u32 = 0;
         while (map_changed) {
             map_changed = false;
-            for (sits.items) |s, index| {
+            for (sits.items, 0..) |s, index| {
                 if (s != '.') {
                     const ncount = countNeighbors(sits.items, stride, index);
                     if (s == 'L' and ncount == 0) {
                         next.items[index] = '#';
                         map_changed = true;
-                    }
-                    else if (s == '#' and ncount >= 4) {
+                    } else if (s == '#' and ncount >= 4) {
                         next.items[index] = 'L';
                         map_changed = true;
-                    }
-                    else {
+                    } else {
                         next.items[index] = s;
                     }
                 } else {
@@ -71,31 +74,28 @@ pub fn main() !void {
     }
 
     { // Solution 2
-        var sits = std.ArrayList(u8).init(allocator);
-        var next = std.ArrayList(u8).init(allocator);
-        defer sits.deinit();
-        defer next.deinit();
-        try sits.resize(input_sits.items.len);
-        try next.resize(input_sits.items.len);
-        std.mem.copy(u8, sits.items, input_sits.items);
-        std.mem.copy(u8, next.items, input_sits.items);
+        var sits = std.ArrayList(u8).empty;
+        var next = std.ArrayList(u8).empty;
+        defer sits.deinit(allocator);
+        defer next.deinit(allocator);
+        try sits.resize(allocator, input_sits.items.len);
+        try next.resize(allocator, input_sits.items.len);
+        @memcpy(sits.items, input_sits.items);
+        @memcpy(next.items, input_sits.items);
 
         var map_changed = true;
-        var count: u32 = 0;
         while (map_changed) {
             map_changed = false;
-            for (sits.items) |s, index| {
+            for (sits.items, 0..) |s, index| {
                 if (s != '.') {
                     const ncount = countDirections(sits.items, stride, index);
                     if (s == 'L' and ncount == 0) {
                         next.items[index] = '#';
                         map_changed = true;
-                    }
-                    else if (s == '#' and ncount >= 5) {
+                    } else if (s == '#' and ncount >= 5) {
                         next.items[index] = 'L';
                         map_changed = true;
-                    }
-                    else {
+                    } else {
                         next.items[index] = s;
                     }
                 } else {
@@ -123,31 +123,24 @@ const Pos = struct {
     const Self = @This();
 
     pub fn fromIndex(stride: usize, index: usize) Self {
-        const sindex = @intCast(i64, index);
-        const sstride = @intCast(i64, stride);
+        const sindex: i64 = @intCast(index);
+        const sstride: i64 = @intCast(stride);
         const y = @divFloor(sindex, sstride);
         const x = sindex - y * sstride;
-        return Self{.x = x, .y = y};
+        return Self{ .x = x, .y = y };
     }
 
     pub fn toIndex(self: *const Self, stride: usize) usize {
-        return @intCast(usize, self.*.y) * stride + @intCast(usize, self.*.x);
+        return @as(usize, @intCast(self.*.y)) * stride + @as(usize, @intCast(self.*.x));
     }
 };
 
 fn countNeighbors(sits: []u8, stride: usize, index: usize) u32 {
     const pos = Pos.fromIndex(stride, index);
     const max_y = sits.len / stride;
-    const sstride = @intCast(i64, stride);
+    const sstride: i64 = @intCast(stride);
 
-    const neighbors_indices = [8]Pos{Pos {.x = pos.x - 1, .y = pos.y - 1},
-                                     Pos {.x = pos.x,     .y = pos.y - 1},
-                                     Pos {.x = pos.x + 1, .y = pos.y - 1},
-                                     Pos {.x = pos.x - 1, .y = pos.y},
-                                     Pos {.x = pos.x + 1, .y = pos.y},
-                                     Pos {.x = pos.x - 1, .y = pos.y + 1},
-                                     Pos {.x = pos.x,     .y = pos.y + 1},
-                                     Pos {.x = pos.x + 1, .y = pos.y + 1}};
+    const neighbors_indices = [8]Pos{ Pos{ .x = pos.x - 1, .y = pos.y - 1 }, Pos{ .x = pos.x, .y = pos.y - 1 }, Pos{ .x = pos.x + 1, .y = pos.y - 1 }, Pos{ .x = pos.x - 1, .y = pos.y }, Pos{ .x = pos.x + 1, .y = pos.y }, Pos{ .x = pos.x - 1, .y = pos.y + 1 }, Pos{ .x = pos.x, .y = pos.y + 1 }, Pos{ .x = pos.x + 1, .y = pos.y + 1 } };
     var acc: u32 = 0;
     for (neighbors_indices) |np| {
         if (np.x < 0 or np.x >= sstride or np.y < 0 or np.y >= max_y) continue;
@@ -162,20 +155,20 @@ fn countNeighbors(sits: []u8, stride: usize, index: usize) u32 {
 fn countDirections(sits: []u8, stride: usize, index: usize) u32 {
     var res: u32 = 0;
     if (isDirectionOccupied(sits, stride, index, -1, -1)) res += 1;
-    if (isDirectionOccupied(sits, stride, index,  0, -1)) res += 1;
-    if (isDirectionOccupied(sits, stride, index,  1, -1)) res += 1;
-    if (isDirectionOccupied(sits, stride, index, -1,  0)) res += 1;
-    if (isDirectionOccupied(sits, stride, index,  1,  0)) res += 1;
-    if (isDirectionOccupied(sits, stride, index, -1,  1)) res += 1;
-    if (isDirectionOccupied(sits, stride, index,  0,  1)) res += 1;
-    if (isDirectionOccupied(sits, stride, index,  1,  1)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, 0, -1)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, 1, -1)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, -1, 0)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, 1, 0)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, -1, 1)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, 0, 1)) res += 1;
+    if (isDirectionOccupied(sits, stride, index, 1, 1)) res += 1;
     return res;
 }
 
 fn isDirectionOccupied(sits: []u8, stride: usize, index: usize, dir_x: i64, dir_y: i64) bool {
     const pos = Pos.fromIndex(stride, index);
     const max_y = sits.len / stride;
-    const sstride = @intCast(i64, stride);
+    const sstride: i64 = @intCast(stride);
 
     var np = pos;
     while (true) {
@@ -194,7 +187,6 @@ fn isDirectionOccupied(sits: []u8, stride: usize, index: usize, dir_x: i64, dir_
 fn printMap(sits: []u8, stride: usize) void {
     var index: usize = 0;
     while (index < sits.len) : (index += stride) {
-        std.debug.print("{}\n", .{ sits[index..index+stride] });
+        std.debug.print("{}\n", .{sits[index .. index + stride]});
     }
-
 }

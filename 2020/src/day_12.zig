@@ -1,5 +1,5 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 const Instruction = struct {
     op: u8,
@@ -8,10 +8,7 @@ const Instruction = struct {
     const Self = @This();
 
     pub fn fromString(str: []const u8) !Self {
-        return Self{
-            .op = str[0],
-            .val = try std.fmt.parseInt(i32, str[1..], 10)
-        };
+        return Self{ .op = str[0], .val = try std.fmt.parseInt(i32, str[1..], 10) };
     }
 };
 
@@ -22,22 +19,28 @@ fn abs(comptime T: type, v: T) T {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_12_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
 
-    const DIRECTIONS = [_]u8{'E', 'S', 'W', 'N'};
+    const input = try fs.cwd().readFileAlloc(io, "data/input_12_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
-    var lines = std.mem.tokenize(input, "\n");
-    var instrs = std.ArrayList(Instruction).init(allocator);
-    defer instrs.deinit();
+    const DIRECTIONS = [_]u8{ 'E', 'S', 'W', 'N' };
+
+    var lines = std.mem.tokenizeScalar(u8, input, '\n');
+    var instrs = std.ArrayList(Instruction).empty;
+    defer instrs.deinit(allocator);
 
     while (lines.next()) |raw_line| {
-        var line = std.mem.trim(u8, raw_line, " \r\n");
+        const line = std.mem.trim(u8, raw_line, " \r\n");
         if (line.len == 0)
             break;
-        try instrs.append(try Instruction.fromString(line));
+        try instrs.append(allocator, try Instruction.fromString(line));
     }
 
     { // Solution 1
@@ -47,29 +50,49 @@ pub fn main() !void {
 
         for (instrs.items) |instr| {
             switch (instr.op) {
-                'E' => { px += instr.val; },
-                'S' => { py -= instr.val; },
-                'W' => { px -= instr.val; },
-                'N' => { py += instr.val; },
+                'E' => {
+                    px += instr.val;
+                },
+                'S' => {
+                    py -= instr.val;
+                },
+                'W' => {
+                    px -= instr.val;
+                },
+                'N' => {
+                    py += instr.val;
+                },
                 'L' => {
-                    var turn = @divFloor(instr.val, 90);
-                    dir = @mod(@intCast(i32, DIRECTIONS.len) + dir - turn, @intCast(i32, DIRECTIONS.len));
+                    const turn = @divFloor(instr.val, 90);
+                    dir = @mod(@as(i32, DIRECTIONS.len) + dir - turn, @as(i32, DIRECTIONS.len));
                 },
                 'R' => {
-                    var turn = @divFloor(instr.val, 90);
-                    dir = @mod(dir + turn, @intCast(i32, DIRECTIONS.len));
+                    const turn = @divFloor(instr.val, 90);
+                    dir = @mod(dir + turn, @as(i32, DIRECTIONS.len));
                 },
                 'F' => {
-                    const diri = @intCast(usize, dir);
+                    const diri: usize = @intCast(dir);
                     switch (DIRECTIONS[diri]) {
-                        'E' => { px += instr.val; },
-                        'S' => { py -= instr.val; },
-                        'W' => { px -= instr.val; },
-                        'N' => { py += instr.val; },
-                        else => { unreachable; }
+                        'E' => {
+                            px += instr.val;
+                        },
+                        'S' => {
+                            py -= instr.val;
+                        },
+                        'W' => {
+                            px -= instr.val;
+                        },
+                        'N' => {
+                            py += instr.val;
+                        },
+                        else => {
+                            unreachable;
+                        },
                     }
                 },
-                else => { unreachable; }
+                else => {
+                    unreachable;
+                },
             }
         }
 
@@ -84,35 +107,71 @@ pub fn main() !void {
 
         for (instrs.items) |instr| {
             switch (instr.op) {
-                'E' => { wx += instr.val; },
-                'S' => { wy -= instr.val; },
-                'W' => { wx -= instr.val; },
-                'N' => { wy += instr.val; },
+                'E' => {
+                    wx += instr.val;
+                },
+                'S' => {
+                    wy -= instr.val;
+                },
+                'W' => {
+                    wx -= instr.val;
+                },
+                'N' => {
+                    wy += instr.val;
+                },
                 'L' => {
-                    var turn = @mod(@divFloor(instr.val, 90), 4);
+                    const turn = @mod(@divFloor(instr.val, 90), 4);
                     switch (turn) {
-                        0 => { },
-                        1 => { const tmp = wx; wx = -wy; wy = tmp; },
-                        2 => { wx = -wx; wy = -wy; },
-                        3 => { const tmp = wx; wx = wy; wy = -tmp; },
-                        else => { unreachable; }
+                        0 => {},
+                        1 => {
+                            const tmp = wx;
+                            wx = -wy;
+                            wy = tmp;
+                        },
+                        2 => {
+                            wx = -wx;
+                            wy = -wy;
+                        },
+                        3 => {
+                            const tmp = wx;
+                            wx = wy;
+                            wy = -tmp;
+                        },
+                        else => {
+                            unreachable;
+                        },
                     }
                 },
                 'R' => {
-                    var turn = @mod(@divFloor(instr.val, 90), 4);
+                    const turn = @mod(@divFloor(instr.val, 90), 4);
                     switch (turn) {
-                        0 => { },
-                        1 => { const tmp = wx; wx = wy; wy = -tmp; },
-                        2 => { wx = -wx; wy = -wy; },
-                        3 => { const tmp = wx; wx = -wy; wy = tmp; },
-                        else => { unreachable; }
+                        0 => {},
+                        1 => {
+                            const tmp = wx;
+                            wx = wy;
+                            wy = -tmp;
+                        },
+                        2 => {
+                            wx = -wx;
+                            wy = -wy;
+                        },
+                        3 => {
+                            const tmp = wx;
+                            wx = -wy;
+                            wy = tmp;
+                        },
+                        else => {
+                            unreachable;
+                        },
                     }
                 },
                 'F' => {
                     px += wx * instr.val;
                     py += wy * instr.val;
                 },
-                else => { unreachable; }
+                else => {
+                    unreachable;
+                },
             }
         }
 

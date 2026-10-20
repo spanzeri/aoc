@@ -1,14 +1,20 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_06_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const input = try fs.cwd().readFileAlloc(io, "data/input_06_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
     { // Solution 1
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.splitScalar(u8, input, '\n');
         var accum: i32 = 0;
         var has_lines = true;
         while (has_lines) {
@@ -26,7 +32,7 @@ pub fn main() !void {
                     break;
 
                 for (line) |c| {
-                    const index = @intCast(u5, c - 'a');
+                    const index: u5 = @intCast(c - 'a');
                     const mask: u32 = @as(u32, 1) << index;
                     if ((bitmap & mask) == 0) {
                         group_accum += 1;
@@ -41,12 +47,12 @@ pub fn main() !void {
     }
 
     { // Solution 2
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.splitScalar(u8, input, '\n');
         var accum: i32 = 0;
         var has_lines = true;
         while (has_lines) {
             var group_len: u8 = 0;
-            var answers = [_]u8{0} ** 26;
+            var answers: [26]u8 = @splat(0);
             while (true) {
                 const line_opt = lines.next();
                 if (line_opt == null) {
@@ -60,7 +66,7 @@ pub fn main() !void {
 
                 group_len += 1;
                 for (line) |c| {
-                    const index = @intCast(usize, c - 'a');
+                    const index: u5 = @intCast(c - 'a');
                     answers[index] += 1;
                 }
             }

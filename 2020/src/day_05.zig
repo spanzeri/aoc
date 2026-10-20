@@ -1,14 +1,20 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_05_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const input = try fs.cwd().readFileAlloc(io, "data/input_05_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
     { // Solution 1
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.tokenizeScalar(u8, input, '\n');
         var max_id: i32 = 0;
 
         while (lines.next()) |line| {
@@ -19,38 +25,44 @@ pub fn main() !void {
             var cmin: i32 = 0;
             var cmax: i32 = 128;
 
-            {var i: usize = 0; while (i < 7) : (i += 1) {
-                const mid = cmin + @divFloor(cmax - cmin, 2);
-                if (trimmed[i] == 'F') {
-                    cmax = mid;
-                } else if (trimmed[i] == 'B') {
-                    cmin = mid;
-                } else unreachable;
-            }}
+            {
+                var i: usize = 0;
+                while (i < 7) : (i += 1) {
+                    const mid = cmin + @divFloor(cmax - cmin, 2);
+                    if (trimmed[i] == 'F') {
+                        cmax = mid;
+                    } else if (trimmed[i] == 'B') {
+                        cmin = mid;
+                    } else unreachable;
+                }
+            }
             std.debug.assert(cmin == cmax - 1);
 
             var rmin: i32 = 0;
             var rmax: i32 = 8;
-            {var i: usize = 7; while (i < 10) : (i += 1) {
-                const mid = rmin + @divFloor(rmax - rmin, 2);
-                if (trimmed[i] == 'L') {
-                    rmax = mid;
-                } else if (trimmed[i] == 'R') {
-                    rmin = mid;
-                } else unreachable;
-            }}
+            {
+                var i: usize = 7;
+                while (i < 10) : (i += 1) {
+                    const mid = rmin + @divFloor(rmax - rmin, 2);
+                    if (trimmed[i] == 'L') {
+                        rmax = mid;
+                    } else if (trimmed[i] == 'R') {
+                        rmin = mid;
+                    } else unreachable;
+                }
+            }
             std.debug.assert(rmin == rmax - 1);
 
             const id = cmin * 8 + rmin;
-            max_id = std.math.max(id, max_id);
+            max_id = @max(id, max_id);
         }
 
         std.debug.print("Day 05 - Solution 1: {}\n", .{max_id});
     }
 
     { // Solution 2
-        var bitmap = [_]u64 {0} ** (128 * 8 / 64);
-        var lines = std.mem.tokenize(input, "\n");
+        var bitmap: [128 * 8 / 64]u64 = @splat(0);
+        var lines = std.mem.tokenizeScalar(u8, input, '\n');
         var min_id: i32 = 128 * 8;
 
         while (lines.next()) |line| {
@@ -61,48 +73,57 @@ pub fn main() !void {
             var cmin: i32 = 0;
             var cmax: i32 = 128;
 
-            {var i: usize = 0; while (i < 7) : (i += 1) {
-                const mid = cmin + @divFloor(cmax - cmin, 2);
-                if (trimmed[i] == 'F') {
-                    cmax = mid;
-                } else if (trimmed[i] == 'B') {
-                    cmin = mid;
-                } else unreachable;
-            }}
+            {
+                var i: usize = 0;
+                while (i < 7) : (i += 1) {
+                    const mid = cmin + @divFloor(cmax - cmin, 2);
+                    if (trimmed[i] == 'F') {
+                        cmax = mid;
+                    } else if (trimmed[i] == 'B') {
+                        cmin = mid;
+                    } else unreachable;
+                }
+            }
             std.debug.assert(cmin == cmax - 1);
 
             var rmin: i32 = 0;
             var rmax: i32 = 8;
-            {var i: usize = 7; while (i < 10) : (i += 1) {
-                const mid = rmin + @divFloor(rmax - rmin, 2);
-                if (trimmed[i] == 'L') {
-                    rmax = mid;
-                } else if (trimmed[i] == 'R') {
-                    rmin = mid;
-                } else unreachable;
-            }}
+            {
+                var i: usize = 7;
+                while (i < 10) : (i += 1) {
+                    const mid = rmin + @divFloor(rmax - rmin, 2);
+                    if (trimmed[i] == 'L') {
+                        rmax = mid;
+                    } else if (trimmed[i] == 'R') {
+                        rmin = mid;
+                    } else unreachable;
+                }
+            }
             std.debug.assert(rmin == rmax - 1);
 
             const id = cmin * 8 + rmin;
-            const index = @intCast(usize, @divFloor(id, 64));
-            const shift = @intCast(u6, @mod(id, 64));
+            const index: usize = @intCast(@divFloor(id, 64));
+            const shift: u6 = @intCast(@mod(id, 64));
             bitmap[index] |= @as(u64, 1) << shift;
-            min_id = std.math.min(id, min_id);
+            min_id = @min(id, min_id);
         }
 
-        { var id = min_id + 1; while (id < (128 * 8) - 1) : (id += 1) {
-            if (!isOccupied(bitmap[0..], id)) {
-                if (isOccupied(bitmap[0..], id + 1) and isOccupied(bitmap[0..], id - 1)) {
-                    std.debug.print("Day 05 - Solution 2: {}\n", .{id});
-                    break;
+        {
+            var id = min_id + 1;
+            while (id < (128 * 8) - 1) : (id += 1) {
+                if (!isOccupied(bitmap[0..], id)) {
+                    if (isOccupied(bitmap[0..], id + 1) and isOccupied(bitmap[0..], id - 1)) {
+                        std.debug.print("Day 05 - Solution 2: {}\n", .{id});
+                        break;
+                    }
                 }
             }
-        }}
+        }
     }
 }
 
 fn isOccupied(bitmap: []u64, id: i32) bool {
-    const index = @intCast(usize, @divFloor(id, 64));
-    const shift = @intCast(u6, @mod(id, 64));
+    const index: usize = @intCast(@divFloor(id, 64));
+    const shift: u6 = @intCast(@mod(id, 64));
     return (bitmap[index] & (@as(u64, 1) << shift)) != 0;
 }

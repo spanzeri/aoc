@@ -1,14 +1,20 @@
 const std = @import("std");
-const fs = std.fs;
+const fs = std.Io.Dir;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = &gpa.allocator;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    const input = try fs.cwd().readFileAlloc(allocator, "data/input_18_1.txt", std.math.maxInt(usize));
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const input = try fs.cwd().readFileAlloc(io, "data/input_18_1.txt", allocator, .limited(std.math.maxInt(usize)));
+    defer allocator.free(input);
 
     { // Solution one
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.tokenizeScalar(u8, input, '\n');
         var sum: u64 = 0;
         while (lines.next()) |raw_line| {
             const line = std.mem.trim(u8, raw_line, " \r\n");
@@ -21,7 +27,7 @@ pub fn main() !void {
     }
 
     { // Solution two
-        var lines = std.mem.tokenize(input, "\n");
+        var lines = std.mem.tokenizeScalar(u8, input, '\n');
         var sum: u64 = 0;
         while (lines.next()) |raw_line| {
             const line = std.mem.trim(u8, raw_line, " \r\n");
@@ -34,14 +40,11 @@ pub fn main() !void {
     }
 }
 
-const ParseResult = struct {
-    val: u64 = 0,
-    txt: []const u8 = undefined
-};
+const ParseResult = struct { val: u64 = 0, txt: []const u8 = undefined };
 
 inline fn skipWhitespaces(s: []const u8) []const u8 {
     var res = s;
-    while (res.len > 0 and std.ascii.isSpace(res[0])) {
+    while (res.len > 0 and std.ascii.isWhitespace(res[0])) {
         res = res[1..];
     }
     return res;
@@ -51,7 +54,7 @@ fn parseExpression(exp: []const u8) ParseResult {
     var s = skipWhitespaces(exp);
     var lhs = switch (s[0]) {
         '0'...'9' => blk: {
-            const v = @intCast(u64, s[0] - '0');
+            const v: u8 = @intCast(s[0] - '0');
             s = s[1..];
             break :blk v;
         },
@@ -60,7 +63,7 @@ fn parseExpression(exp: []const u8) ParseResult {
             s = res.txt;
             break :blk res.val;
         },
-        else => unreachable
+        else => unreachable,
     };
 
     while (true) {
@@ -71,9 +74,9 @@ fn parseExpression(exp: []const u8) ParseResult {
         const op = s[0];
         std.debug.assert(op == '*' or op == '+');
         s = skipWhitespaces(s[1..]);
-        var rhs = switch (s[0]) {
+        const rhs = switch (s[0]) {
             '0'...'9' => blk: {
-                const v = @intCast(u64, s[0] - '0');
+                const v: u64 = @intCast(s[0] - '0');
                 s = s[1..];
                 break :blk v;
             },
@@ -93,38 +96,38 @@ fn parseExpression(exp: []const u8) ParseResult {
     }
 }
 
-fn parseComponent(exp: []const u8, a: *std.mem.Allocator) ParseResult {
+fn parseComponent(exp: []const u8, a: std.mem.Allocator) ParseResult {
     var s = skipWhitespaces(exp);
     return switch (s[0]) {
-        '0' ... '9' => .{ .val = s[0] - '0', .txt = s[1..] },
+        '0'...'9' => .{ .val = s[0] - '0', .txt = s[1..] },
         '(' => blk: {
             const r = parseExpressionAdvanced(s[1..], a) catch unreachable;
             break :blk r;
         },
-        else => unreachable
+        else => unreachable,
     };
 }
 
-fn parseExpressionAdvanced(exp: []const u8, a: *std.mem.Allocator) !ParseResult {
+fn parseExpressionAdvanced(exp: []const u8, a: std.mem.Allocator) !ParseResult {
     var s = exp;
-    var comps = std.ArrayList(u64).init(a);
-    defer comps.deinit();
+    var comps = std.ArrayList(u64).empty;
+    defer comps.deinit(a);
 
-    var lhs = blk: {
+    const lhs = blk: {
         const r = parseComponent(s, a);
         s = r.txt;
         break :blk r.val;
     };
 
-    try comps.append(lhs);
+    try comps.append(a, lhs);
 
     while (true) {
         if (s.len == 0 or s[0] == ')') break;
         s = skipWhitespaces(s);
-        var op = s[0];
+        const op = s[0];
         s = s[1..];
 
-        var rhs = blk: {
+        const rhs = blk: {
             const r = parseComponent(s, a);
             s = r.txt;
             break :blk r.val;
@@ -132,11 +135,9 @@ fn parseExpressionAdvanced(exp: []const u8, a: *std.mem.Allocator) !ParseResult 
 
         if (op == '+') {
             comps.items[comps.items.len - 1] += rhs;
-        }
-        else if (op == '*') {
-            try comps.append(rhs);
-        }
-        else unreachable;
+        } else if (op == '*') {
+            try comps.append(a, rhs);
+        } else unreachable;
     }
 
     std.debug.assert(comps.items.len > 0);
