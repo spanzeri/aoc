@@ -27,13 +27,7 @@ pub fn main() !void {
         while (lines.next()) |raw_line| {
             const line = std.mem.trim(u8, raw_line, " \r\n");
             if (line.len == 0) break;
-
-            var rule_it = std.mem.tokenizeScalar(u8, line, ':');
-            const id = std.fmt.parseInt(usize, rule_it.next().?, 10) catch unreachable;
-            if (id >= txt_rules.items.len) {
-                try txt_rules.resize(allocator, id + 1);
-            }
-            txt_rules.items[id] = std.mem.trim(u8, rule_it.next().?, " \r\n");
+            try txt_rules.append(allocator, line);
         }
 
         while (lines.next()) |raw_line| {
@@ -43,186 +37,138 @@ pub fn main() !void {
         }
     }
 
-    const trie = try buildTries(allocator, txt_rules.items);
+    const rules = try parseRules(txt_rules.items, allocator);
+    defer freeRules(rules, allocator);
+
+    // for (rules, 0..) |rule, i| {
+    //     std.debug.print("{}: {any}\n", .{i, rule});
+    // }
 
     { // Solution one
         var count: u32 = 0;
-        for (messages.items) |msg| {
-            if (trie.validWord(msg)) {
-                count += 1;
-            }
+        for (messages.items) |m| {
+            var t = [_]u64{ 0 };
+            if (doesMatch(m, rules, &t, allocator)) { count += 1; }
         }
         std.debug.print("Day 19 - Solution 1: {}\n", .{count});
     }
 
     { // Solution two
-        std.debug.print("Day 19 - Solution 2: {}\n", .{0});
+        var rule8_0 = [_]Rule{.{ .rule = 42 }};
+        var rule8_1 = [_]Rule{.{ .rule = 42 }, .{ .rule = 8 }};
+        var rule8 = [_][]Rule{ &rule8_0, &rule8_1 };
+        const old_rule8 = rules[8];
+        rules[8] = &rule8;
+        defer rules[8] = old_rule8;
+
+        var rule11_0 = [_]Rule{.{ .rule = 42 }, .{ .rule = 31 }};
+        var rule11_1 = [_]Rule{.{ .rule = 42 }, .{ .rule = 11 }, .{ .rule = 31 }};
+        var rule11 = [_][]Rule{ &rule11_0, &rule11_1 };
+        const old_rule11 = rules[11];
+        rules[11] = &rule11;
+        defer rules[11] = old_rule11;
+
+        var count: u32 = 0;
+        for (messages.items) |m| {
+            var t = [_]u64{ 0 };
+            if (doesMatch(m, rules, &t, allocator)) { count += 1; }
+        }
+
+        std.debug.print("Day 19 - Solution 2: {}\n", .{count});
     }
 }
 
-const NodeTag = enum { value, rule };
+fn doesMatch(s: []const u8, rules: [][][]Rule, t: []u64, a: std.mem.Allocator) bool {
+   if (s.len == 0 and t.len == 0) return true;
+    if (s.len == 0 or t.len == 0) return false;
 
-const Node = union(NodeTag) { value: u8, rule: u8 };
+    // std.debug.print("Trying to match: '{s}'. Rules: {any}\n", .{s, t});
 
-const ProcessedRule = struct {
-    seqs: std.ArrayList(std.ArrayList(Node)),
-    allocator: std.mem.Allocator,
-    const Self = @This();
+    const rule = rules[t[0]];
+    for (rule) |seq| {
+        if (seq.len == 1) {
+            switch (seq[0]) {
+                .terminal => |c| {
+                    if (c == s[0]) {
+                        return doesMatch(s[1..s.len], rules, t[1..t.len], a);
+                    } else {
+                        return false;
+                    }
+                },
+                .rule => {},
+            }
+        }
 
-    pub fn fromText(a: std.mem.Allocator, txt: []const u8) !Self {
-        var seqs = std.ArrayList(std.ArrayList(Node)).empty;
-        var it = mem.tokenizeScalar(u8, txt, '|');
-        while (it.next()) |raw_option| {
-            var option = std.ArrayList(Node).empty;
-            const option_txt = mem.trim(u8, raw_option, " \r\n");
-            if (option_txt[0] == '\"') {
-                try option.append(a, Node{ .value = option_txt[1] });
-            } else {
-                var rule_it = mem.tokenizeScalar(u8, option_txt, ' ');
-                while (rule_it.next()) |rule| {
-                    try option.append(a, Node{ .rule = try std.fmt.parseInt(u8, rule, 10) });
+        var new_t = expandSeq(t, seq, a);
+        defer new_t.deinit(a);
+        if (doesMatch(s, rules, new_t.items, a)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn expandSeq(t: []u64, seq: []Rule, a: std.mem.Allocator) std.ArrayList(u64) {
+    var res = std.ArrayList(u64).initCapacity(a, t.len + seq.len - 1) catch @panic("OOM");
+    for (seq) |r| {
+        res.append(a, r.rule) catch @panic("OOM");
+    }
+    for (t[1..t.len]) |tt| {
+        res.append(a, tt) catch @panic("OOM");
+    }
+    return res;
+}
+
+const Rule = union(enum) {
+    terminal: u8,
+    rule: u64, 
+};
+
+fn parseRules(lines: [][]const u8, a: std.mem.Allocator) ![][][]Rule {
+    var result = std.ArrayList([][]Rule).empty;
+
+    for (lines) |line| {
+        var parts = std.mem.tokenizeScalar(u8, line, ':');
+        const index = try std.fmt.parseInt(u64, std.mem.trim(u8, parts.next().?, " "), 10);
+        var opts = std.mem.tokenizeScalar(u8, parts.next().?, '|');
+
+        var matches = std.ArrayList([]Rule).empty;
+
+        while (opts.next()) |raw_opt| {
+            var match = std.ArrayList(Rule).empty;
+            defer match.deinit(a);
+
+            const opt = std.mem.trim(u8, raw_opt, " ");
+            var smatches = std.mem.tokenizeScalar(u8, opt, ' ');
+            while (smatches.next()) |m| {
+                if (m[0] == '"') {
+                    try match.append(a, Rule{ .terminal = m[1] });
+                } else {
+                    try match.append(a, Rule{ .rule = try std.fmt.parseInt(u64, m, 10) });
                 }
             }
-            try seqs.append(a, option);
-        }
-        return Self{ .seqs = seqs, .allocator = a };
-    }
 
-    pub fn deinit(s: *Self) void {
-        for (s.seqs.items, 0..) |_, seqi| {
-            s.seqs.items[seqi].deinit(s.allocator);
-        }
-        s.seqs.deinit(s.allocator);
-    }
-
-    pub fn print(s: *const Self) void {
-        for (s.seqs.items) |seq| {
-            for (seq.items) |node| {
-                std.debug.print("{} ", .{node});
-            }
-            std.debug.print(" | ", .{});
-        }
-        std.debug.print("\n", .{});
-    }
-};
-
-fn buildTries(a: std.mem.Allocator, txtrules: [][]const u8) !Trie {
-    var rules = std.ArrayList(ProcessedRule).empty;
-    defer {
-        for (rules.items, 0..) |_, ri| {
-            rules.items[ri].deinit();
-        }
-        rules.deinit(a);
-    }
-    for (txtrules) |txtrule| {
-        try rules.append(a, try ProcessedRule.fromText(a, txtrule));
-    }
-
-    var seqs = std.ArrayList(std.ArrayList(Node)).empty;
-    defer seqs.deinit(a);
-
-    const first = Node{ .rule = 0 };
-    var first_seq = std.ArrayList(Node).empty;
-    try first_seq.append(a, first);
-    try seqs.append(a, first_seq);
-
-    var trie = Trie.init(a);
-
-    outer: while (seqs.items.len > 0) {
-        var seq = seqs.items[seqs.items.len - 1];
-        defer seq.deinit(a);
-        try seqs.resize(a, seqs.items.len - 1);
-
-        for (seq.items, 0..) |node, ni| {
-            switch (node) {
-                NodeTag.rule => |nindex| {
-                    const rule = rules.items[@as(usize, nindex)];
-                    // Make new sequences and add them to the list
-                    for (rule.seqs.items) |option| {
-                        var new_nodes = std.ArrayList(Node).empty;
-                        try new_nodes.resize(a, seq.items.len - 1 + option.items.len);
-                        @memcpy(new_nodes.items[0..ni], seq.items[0..ni]);
-                        @memcpy(new_nodes.items[ni .. ni + option.items.len], option.items);
-                        @memcpy(new_nodes.items[ni + option.items.len ..], seq.items[ni + 1 ..]);
-                        try seqs.append(a, new_nodes);
-                    }
-
-                    continue :outer;
-                },
-                NodeTag.value => {},
-            }
+            try matches.append(a, try match.toOwnedSlice(a));
         }
 
-        // If we get here, all the items in the sequence are values
-        // print("Found sequence: ", .{});
-        // for (seq.items, 0..) |node, ni| {
-        //     switch (node) {
-        //         NodeTag.value => |v| { print("{c} ", .{v}); },
-        //         NodeTag.rule => unreachable
-        //     }
-        // }
-        // std.debug.print("\n", .{});
 
-        try trie.addSequence(seq.items);
+        if (index >= result.items.len) {
+            try result.resize(a, index + 1);
+        }
+
+        result.items[index] = try matches.toOwnedSlice(a);
     }
 
-    return trie;
+    return try result.toOwnedSlice(a);
 }
 
-const Trie = struct {
-    const TrieNode = struct { a: usize = 0, b: usize = 0, term: bool = false };
-    const Self = @This();
-
-    nodes: std.ArrayList(TrieNode),
-    allocator: std.mem.Allocator,
-
-    pub fn init(a: std.mem.Allocator) Self {
-        var s = Self{ .nodes = std.ArrayList(TrieNode).empty, .allocator = a };
-        s.nodes.append(a, TrieNode{}) catch unreachable;
-        return s;
-    }
-
-    pub fn deinit(s: *Self) void {
-        s.nodes.deinit(s.allocator);
-    }
-
-    pub fn addSequence(s: *Self, seqs: []Node) !void {
-        var nodei: usize = 0;
-        for (seqs, 0..) |seq_node, seq_node_index| {
-            switch (seq_node) {
-                NodeTag.value => |v| {
-                    if (v == 'a') {
-                        if (s.nodes.items[nodei].a == 0) {
-                            try s.nodes.append(s.allocator, TrieNode{});
-                            s.nodes.items[nodei].a = s.nodes.items.len - 1;
-                        }
-                        nodei = s.nodes.items[nodei].a;
-                    } else if (v == 'b') {
-                        if (s.nodes.items[nodei].b == 0) {
-                            try s.nodes.append(s.allocator, TrieNode{});
-                            s.nodes.items[nodei].b = s.nodes.items.len - 1;
-                        }
-                        nodei = s.nodes.items[nodei].b;
-                    } else unreachable;
-                },
-                NodeTag.rule => unreachable,
-            }
-            s.nodes.items[nodei].term = s.nodes.items[nodei].term or (seq_node_index == seqs.len - 1);
+fn freeRules(rules: [][][]Rule, a: std.mem.Allocator) void {
+    for (rules) |r| {
+        for (r) |matches| {
+            a.free(matches);
         }
+        a.free(r);
     }
+    a.free(rules);
+}
 
-    pub fn validWord(s: *const Self, wrd: []const u8) bool {
-        var node = &s.nodes.items[0];
-        for (wrd, 0..) |c, i| {
-            if (c == 'a') {
-                if (node.a == 0) return false;
-                node = &s.nodes.items[node.a];
-            } else if (c == 'b') {
-                if (node.b == 0) return false;
-                node = &s.nodes.items[node.b];
-            }
-            if (i == wrd.len - 1) return node.term;
-        }
-        unreachable;
-    }
-};
